@@ -1,14 +1,17 @@
 package com.ljm.secondscrolldemo.customview;
 
+import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
 import android.animation.ValueAnimator;
 import android.content.Context;
 import android.util.AttributeSet;
 import android.view.MotionEvent;
 import android.view.VelocityTracker;
+import android.view.ViewGroup;
 import android.view.animation.PathInterpolator;
 import android.widget.LinearLayout;
 
-import com.ljm.secondscrolldemo.utills.ScrollStateValue;
+import com.ljm.secondscrolldemo.other.ScrollStateValue;
 
 /**
  * Created by ljm on 2017/10/20.
@@ -16,8 +19,18 @@ import com.ljm.secondscrolldemo.utills.ScrollStateValue;
 
 public class ScrollLinearLayout extends LinearLayout {
 
+    private ViewGroup.LayoutParams mLayoutParams;
+    private float mLastY = 0;
+    private float mDeltY = 0;
+    private float mLastX = 0;
+    private float mDeltX = 0;
+    private float mCurrentVel = 0;
+
+    private OnChangeListener mListener;
+    private float currentScrollOffset = 0;//当前滚动偏移量
+
     private int mContentViewState = ScrollStateValue.LISTVIEW_TOP_STATE;
-    private ValueAnimator mTransitionAnim;
+    private ValueAnimator mTranslationAnim;
     private boolean mIsAnimPlay = false;
     private VelocityTracker mVelocityTracker;
 
@@ -27,6 +40,7 @@ public class ScrollLinearLayout extends LinearLayout {
     private int mLayoutHeightMin = 200;
     private int mLayoutHeightMax = 400;
     private int mLayoutThresHold = 300;
+    private int mCurrentScrollState = ScrollStateValue.SCROLL_MIN_STATE;
 
     public ScrollLinearLayout(Context context) {
         this(context, null);
@@ -41,9 +55,21 @@ public class ScrollLinearLayout extends LinearLayout {
         init();
     }
 
+    public void setOnChangeListener(OnChangeListener listener) {
+        mListener = listener;
+    }
+
+    public void setContentViewState(int state) {
+        mContentViewState = state;
+    }
+
     private void init() {
         easeOutCubic = new PathInterpolator(0.215f, 0.61f, 0.355f, 1);
         easeInCubic = new PathInterpolator(0.55f, 0.055f, 0.675f, 0.19f);
+    }
+
+    public interface OnChangeListener {
+        public void onChange(float progress);
     }
 
     @Override
@@ -53,13 +79,128 @@ public class ScrollLinearLayout extends LinearLayout {
                 || mContentViewState == ScrollStateValue.LISTVIEW_FLING_STATE) {
             return false;
         }
-        //如果
+        //获取VelocityTracker实例对象
         if (mVelocityTracker == null) {
             mVelocityTracker = VelocityTracker.obtain();
         }
         mVelocityTracker.addMovement(event);
         final VelocityTracker vt = mVelocityTracker;
 
+        switch (event.getAction()) {
+            case MotionEvent.ACTION_DOWN:
+                mLastY = event.getY();
+                return true;
+            case MotionEvent.ACTION_MOVE:
+                mDeltY = event.getY() - mLastY;
+                handlerMove(mDeltY);
+                vt.computeCurrentVelocity(1000);
+                mCurrentVel = vt.getYVelocity();
+                break;
+            case MotionEvent.ACTION_UP:
+                if (mVelocityTracker != null) {
+                    mVelocityTracker.clear();
+                    mVelocityTracker.recycle();
+                    mVelocityTracker = null;
+                }
+                startAnim(mCurrentVel);
+                break;
+        }
+
         return super.onTouchEvent(event);
+    }
+
+    @Override
+    public boolean onInterceptTouchEvent(MotionEvent ev) {
+        if (mIsAnimPlay) {
+            return true;
+        }
+        if (ev.getAction() == MotionEvent.ACTION_DOWN) {
+            mLastY = ev.getY();
+            mDeltY = 0;
+        } else {
+            mDeltY = ev.getY() - mLastY;
+        }
+        if (currentScrollOffset == ScrollStateValue.SCROLL_MIN_STATE) {
+            return true;
+        }
+        if (currentScrollOffset == ScrollStateValue.SCROLL_MAX_STATE
+                && mContentViewState == ScrollStateValue.LISTVIEW_TOP_STATE && mDeltY > 0){
+            return true;
+        }
+        if(mContentViewState == ScrollStateValue.LISTVIEW_FLING_STATE){
+            return false;
+        }
+        return super.onInterceptTouchEvent(ev);
+    }
+
+    private void handlerMove(float delty) {
+        mLayoutParams = getLayoutParams();
+        mLayoutParams.height = (int) (mLayoutParams.height - delty);
+        mLayoutParams.height = mLayoutParams.height > mLayoutHeightMax ? mLayoutHeightMax :
+                mLayoutParams.height;
+        mLayoutParams.height = mLayoutParams.height < mLayoutHeightMin ? mLayoutHeightMin :
+                mLayoutParams.height;
+        setLayoutParams(mLayoutParams);
+        float progress = (float) (mLayoutParams.height - mLayoutHeightMin) * 100
+                / (mLayoutHeightMax - mLayoutHeightMin);
+        if (mListener != null && currentScrollOffset != progress) {
+            mListener.onChange(progress);
+        }
+        currentScrollOffset = progress;
+    }
+
+    private void startAnim(float veloctity) {
+        mIsAnimPlay = true;
+        int startValue = 0;
+        int endValue = 0;
+        if (Math.abs(veloctity) < ScrollStateValue.SCROLL_VELOCITY_THRESHOLD) {
+            if (mLayoutParams.height > mLayoutThresHold) {
+                startValue = mLayoutParams.height;
+                endValue = mLayoutHeightMax;
+            } else {
+                startValue = mLayoutParams.height;
+                endValue = mLayoutHeightMin;
+            }
+        } else {
+            if (mCurrentScrollState == ScrollStateValue.SCROLL_MIN_STATE) {
+                startValue = mLayoutParams.height;
+                endValue = mLayoutHeightMax;
+            } else {
+                startValue = mLayoutParams.height;
+                endValue = mLayoutHeightMin;
+            }
+        }
+        if (mTranslationAnim != null) {
+            mTranslationAnim.cancel();
+        }
+        mTranslationAnim = ValueAnimator.ofInt(startValue, endValue);
+        long duration = (long) ((float) Math.abs(startValue - endValue)
+                / (float) Math.abs(mLayoutHeightMax - mLayoutThresHold) * ScrollStateValue.TRANSITION_DURATION_MAX);
+        mTranslationAnim.setDuration(duration);
+        mTranslationAnim.setInterpolator(easeOutCubic);
+        mTranslationAnim.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+            @Override
+            public void onAnimationUpdate(ValueAnimator animation) {
+                mLayoutParams.height = (int) animation.getAnimatedValue();
+                setLayoutParams(mLayoutParams);
+                float progress = (float) (mLayoutParams.height - mLayoutHeightMin)
+                        * 100 / (mLayoutHeightMax - mLayoutHeightMin);
+
+                if (mListener != null && currentScrollOffset != progress) {
+                    mListener.onChange(progress);
+                }
+                currentScrollOffset = progress;
+                invalidate();
+            }
+        });
+        mTranslationAnim.addListener(new AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(Animator animation) {
+                super.onAnimationEnd(animation);
+                mIsAnimPlay = false;
+                mCurrentScrollState = (int) currentScrollOffset;
+            }
+        });
+        mTranslationAnim.start();
     }
 }

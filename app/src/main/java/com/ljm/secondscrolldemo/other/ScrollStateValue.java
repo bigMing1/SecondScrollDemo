@@ -1,4 +1,4 @@
-package com.ljm.secondscrolldemo.utills;
+package com.ljm.secondscrolldemo.other;
 
 /**
  * Created by ljm on 2017/10/20.
@@ -15,10 +15,10 @@ public class ScrollStateValue {
     public static final int LISTVIEW_BOTTOM_STATE = 2;
     //滚动的最大高度
     public static final int SCROLL_MAX_STATE = 100;
-    //滚动的最小高度
+    //滚动的最小进度
     public static final int SCROLL_MIN_STATE = 0;
     //平移的最大的持续时间
     public static final int TRANSITION_DURATION_MAX = 300;
-    //滚动的速阀值
+    //滚动的速率阀值
     public static final int SCROLL_VELOCITY_THRESHOLD = 300;
 }
