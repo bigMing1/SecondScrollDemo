@@ -5,6 +5,7 @@ import android.animation.AnimatorListenerAdapter;
 import android.animation.ValueAnimator;
 import android.content.Context;
 import android.util.AttributeSet;
+import android.util.Log;
 import android.view.MotionEvent;
 import android.view.VelocityTracker;
 import android.view.ViewGroup;
@@ -22,8 +23,6 @@ public class ScrollLinearLayout extends LinearLayout {
     private ViewGroup.LayoutParams mLayoutParams;
     private float mLastY = 0;
     private float mDeltY = 0;
-    private float mLastX = 0;
-    private float mDeltX = 0;
     private float mCurrentVel = 0;
 
     private OnChangeListener mListener;
@@ -35,11 +34,10 @@ public class ScrollLinearLayout extends LinearLayout {
     private VelocityTracker mVelocityTracker;
 
     private PathInterpolator easeOutCubic;
-    private PathInterpolator easeInCubic;
 
-    private int mLayoutHeightMin = 200;
-    private int mLayoutHeightMax = 400;
-    private int mLayoutThresHold = 300;
+    private int mLayoutHeightMin = 0;
+    private int mLayoutHeightMax = 0;
+    private int mLayoutThresHold = 0;
     private int mCurrentScrollState = ScrollStateValue.SCROLL_MIN_STATE;
 
     public ScrollLinearLayout(Context context) {
@@ -64,8 +62,10 @@ public class ScrollLinearLayout extends LinearLayout {
     }
 
     private void init() {
+        mLayoutHeightMin = dpToPixel(200);
+        mLayoutThresHold = dpToPixel(300);
+        mLayoutHeightMax = dpToPixel(400);
         easeOutCubic = new PathInterpolator(0.215f, 0.61f, 0.355f, 1);
-        easeInCubic = new PathInterpolator(0.55f, 0.055f, 0.675f, 0.19f);
     }
 
     public interface OnChangeListener {
@@ -74,7 +74,8 @@ public class ScrollLinearLayout extends LinearLayout {
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
-        //如果动画在播放或ListView在滑动时，不处理事件
+        Log.d("TAG", "ScrollLinearLayout的onTouchEvent执行...");
+        //如果动画在播放或ListView在滑动时，不处理事件,不接受此事件的其它事件（move,up）
         if (mIsAnimPlay
                 || mContentViewState == ScrollStateValue.LISTVIEW_FLING_STATE) {
             return false;
@@ -97,20 +98,29 @@ public class ScrollLinearLayout extends LinearLayout {
                 mCurrentVel = vt.getYVelocity();
                 break;
             case MotionEvent.ACTION_UP:
-                if (mVelocityTracker != null) {
+                if (null != mVelocityTracker) {
                     mVelocityTracker.clear();
                     mVelocityTracker.recycle();
                     mVelocityTracker = null;
                 }
                 startAnim(mCurrentVel);
                 break;
+            case MotionEvent.ACTION_CANCEL:
+                if (null != mVelocityTracker) {
+                    mVelocityTracker.clear();
+                    mVelocityTracker.recycle();
+                    mVelocityTracker = null;
+                }
+                break;
+            default:
+                break;
         }
-
         return super.onTouchEvent(event);
     }
 
     @Override
     public boolean onInterceptTouchEvent(MotionEvent ev) {
+        Log.d("TAG", "ScrollLinearLayout的onIntercepTouchEvent执行...");
         if (mIsAnimPlay) {
             return true;
         }
@@ -124,10 +134,10 @@ public class ScrollLinearLayout extends LinearLayout {
             return true;
         }
         if (currentScrollOffset == ScrollStateValue.SCROLL_MAX_STATE
-                && mContentViewState == ScrollStateValue.LISTVIEW_TOP_STATE && mDeltY > 0){
+                && mContentViewState == ScrollStateValue.LISTVIEW_TOP_STATE && mDeltY > 0) {
             return true;
         }
-        if(mContentViewState == ScrollStateValue.LISTVIEW_FLING_STATE){
+        if (mContentViewState == ScrollStateValue.LISTVIEW_FLING_STATE) {
             return false;
         }
         return super.onInterceptTouchEvent(ev);
@@ -202,5 +212,10 @@ public class ScrollLinearLayout extends LinearLayout {
             }
         });
         mTranslationAnim.start();
+    }
+
+    public int dpToPixel(float dpValue) {
+        float m = getResources().getDisplayMetrics().density;
+        return (int) (dpValue * m + 0.5);
     }
 }

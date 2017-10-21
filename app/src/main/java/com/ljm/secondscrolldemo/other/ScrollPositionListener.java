@@ -15,8 +15,8 @@ public class ScrollPositionListener implements AbsListView.OnScrollListener {
 
     private ScrollPositonCallback mCallback;
 
-    public ScrollPositionListener(ScrollPositonCallback mCallback) {
-        this.mCallback = mCallback;
+    public ScrollPositionListener(ScrollPositonCallback callback) {
+        mCallback = callback;
     }
 
     @Override
@@ -30,7 +30,7 @@ public class ScrollPositionListener implements AbsListView.OnScrollListener {
                     return;
                 }
             } else if (view.getLastVisiblePosition() == (view.getCount() - 1)) {
-                View v = view.getChildAt(view.getCount() - 1);
+                View v = view.getChildAt(view.getChildCount() - 1);
                 int y = v.getBottom();
                 if (y == view.getBottom()) {
                     mCallback.execute(ScrollStateValue.LISTVIEW_BOTTOM_STATE);
